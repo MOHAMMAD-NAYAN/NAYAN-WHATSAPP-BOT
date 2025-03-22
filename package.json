@@ -40,7 +40,7 @@
     "link-preview-js": "^3.0.5",
     "maher-zubair-baileys": "^6.6.5",
     "nayan-apis-server": "^2.4.5",
-    "nayan-videos-downloader": "^0.1.3",
+    "nayan-videos-downloader": "^0.1.5",
     "phin": "^3.7.1",
     "pino": "^9.6.0",
     "qrcode-terminal": "^0.12.0",
