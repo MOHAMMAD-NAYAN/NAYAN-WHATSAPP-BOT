@@ -1,6 +1,6 @@
 {
   "name": "NAYAN-WHATSAPP-BOT",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "WhatsApp Bot Created by Mohammad Nayan",
   "main": "index.js",
   "scripts": {
