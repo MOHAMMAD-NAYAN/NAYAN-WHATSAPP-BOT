@@ -18,6 +18,9 @@
 
 ---
 
+## Requirements
+- Node.js 20 or higher
+
 ## 🚀 Steps to Deploy
 
 ### Step 1: Fork the Repository
