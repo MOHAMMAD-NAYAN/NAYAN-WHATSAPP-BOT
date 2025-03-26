@@ -4,15 +4,12 @@ const path = require('path');
 const nayan = require('nayan-videos-downloader');
 const Youtube = require('youtube-search-api');
 
-const selectionData = {};
-
 async function downloadMusicFromYoutube(link, filePath) {
   if (!link) throw new Error('Link Not Found');
   const timestart = Date.now();
 
   try {
     const data = await nayan.ytdown(link);
-    
     const audioUrl = data.data.video;
 
     return new Promise((resolve, reject) => {
@@ -40,93 +37,79 @@ async function downloadMusicFromYoutube(link, filePath) {
   }
 }
 
-module.exports = {
-  config: {
-    name: 'song',
-    aliases: ['audio'],
-    permission: 0,
-    prefix: true,
-    description: 'Search and download songs from YouTube.',
-    usage: ['song <keyword> - Search and download songs from YouTube.'],
-    categories: 'Media',
-    credit: 'Developed by Mohammad Nayan',
-  },
+  module.exports = {
+    config: {
+      name: 'song',
+      aliases: ['audio'],
+      permission: 0,
+      prefix: true,
+      description: 'Search and download songs from YouTube.',
+      usage: ['song <keyword> - Search and download songs from YouTube.'],
+      categories: 'Media',
+      credit: 'Developed by Mohammad Nayan',
+    },
 
-  event: async ({ event, api, body }) => {
-    const { threadId, senderId } = event;
+    start: async function ({ api, event, args}) {
+        const { threadId, senderId } = event;
 
-    if (!selectionData[threadId]) return;
 
-    const { userId, message, links } = selectionData[threadId];
-    
+        if (!args.length) {
+          await api.sendMessage(threadId, { text: 'Please provide a keyword to search. Example: song <keyword>' });
+          return;
+        }
+        const keyword = args.join(' ');
 
-    if (userId !== senderId || !message) return;
-    if(!message?.key.fromMe) return;
-  
+        const results = await Youtube.GetListByKeyword(keyword, false, 6);
+          const links = results.items.map((item) => item.id);
+          const titles = results.items.map((item, index) => `${index + 1}. ${item.title} (${item.length.simpleText})`);
 
-    const selectedIndex = parseInt(body, 10) - 1;
+          const message = `🔎 Found ${links.length} results for "${keyword}":\n\n${titles.join('\n')}\n\nReply with a number (1-${links.length}) to download.`;
 
-    if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= links.length) {
-      await api.sendMessage(threadId, { text: 'Invalid selection. Reply with a number between 1 and 5.' });
-      return;
-    }
+        const sentMessage = await api.sendMessage(event.threadId, { text: message });
 
-    delete selectionData[threadId];
-    await api.sendMessage(threadId, { delete: message.key });
+        global.client.handleReply.push({
+            name: this.config.name,
+            messageID: sentMessage.key.id,
+            author: event.senderId,
+            links
+        });
+    },
 
-    
+    handleReply: async function ({ api, event, handleReply }) {
+        if (event.senderId !== handleReply.author) return;
+        const { threadId, senderId, body } = event;
+      const {links, messageID} = handleReply;
 
-    const selectedLink = `https://www.youtube.com/watch?v=${links[selectedIndex]}`;
-    const filePath = path.join(__dirname, `cache/song_${Date.now()}.mp3`);
-    const downloadMsg = await api.sendMessage(threadId, { text: '🎧 Downloading your song...' });
 
-    try {
-      const result = await downloadMusicFromYoutube(selectedLink, filePath);
+        const selectedIndex = parseInt(body, 10) - 1;
+        if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= links.length) {
+          await api.sendMessage(threadId, { text: '❌ Invalid selection. Reply with a number between 1 and 5.' });
+          return;
+        }
+      await api.sendMessage(threadId, { delete: { remoteJid: threadId, fromMe: false, id: messageID, participant: senderId } });
 
-      await api.sendMessage(threadId, { delete: downloadMsg.key });
-      await api.sendMessage(threadId, {
-        text: `🎵 Title: ${result.title}\n⏱️ Processing Time: ${Math.floor((Date.now() - result.timestart) / 1000)} seconds.`
-      });
-      await api.sendMessage(threadId, {
-        audio: { url: filePath },
-        mimetype: "audio/mpeg",
-      });
+      const selectedLink = `https://www.youtube.com/watch?v=${links[selectedIndex]}`;
+      const filePath = path.join(__dirname, `cache/song_${Date.now()}.mp3`);
+      const downloadMsg = await api.sendMessage(threadId, { text: '🎧 Downloading your song...' });
 
-      fs.unlink(filePath, (err) => {
-        if (err) console.error(`Failed to delete file: ${filePath}`);
-      });
-    } catch (error) {
-      console.error('Error during song download:', error);
-      await api.sendMessage(threadId, { text: '❌ Failed to download the song. Please try again later.' });
-    }
-  },
+      try {
+        const result = await downloadMusicFromYoutube(selectedLink, filePath);
 
-  start: async ({ event, api, args }) => {
-    const { threadId, senderId } = event;
+        await api.sendMessage(threadId, { delete: { remoteJid: threadId, fromMe: false, id: downloadMsg.key.id, participant: senderId } });
+        await api.sendMessage(threadId, {
+          text: `🎵 Title: ${result.title}\n⏱️ Processing Time: ${Math.floor((Date.now() - result.timestart) / 1000)} seconds.`
+        });
+        await api.sendMessage(threadId, {
+          audio: { url: filePath },
+          mimetype: "audio/mpeg",
+        });
 
-    if (!args.length) {
-      await api.sendMessage(threadId, { text: 'Please provide a keyword to search. Example: song <keyword>' });
-      return;
-    }
-
-    const keyword = args.join(' ');
-
-    try {
-      const results = await Youtube.GetListByKeyword(keyword, false, 6);
-      const links = results.items.map((item) => item.id);
-      const titles = results.items.map((item, index) => `${index + 1}. ${item.title} (${item.length.simpleText})`);
-
-      const message = `🔎 Found ${links.length} results for "${keyword}":\n\n${titles.join('\n')}\n\nReply with a number (1-${links.length}) to download.`;
-      const msg = await api.sendMessage(threadId, { text: message });
-
-      selectionData[threadId] = {
-        userId: senderId,
-        message: msg,
-        links,
-      };
-    } catch (error) {
-      console.error('Error searching YouTube:', error);
-      await api.sendMessage(threadId, { text: '❌ An error occurred while searching for songs. Please try again.' });
-    }
-  },
+        fs.unlink(filePath, (err) => {
+          if (err) console.error(`Failed to delete file: ${filePath}`);
+        });
+      } catch (error) {
+        console.error('Error during song download:', error);
+        await api.sendMessage(threadId, { text: '❌ Failed to download the song. Please try again later.' });
+      }
+    },
 };
